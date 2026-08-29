@@ -6,11 +6,22 @@ An [MCP](https://modelcontextprotocol.io) server that exposes a `.mind/` folder 
 
 | Tool | Description |
 |------|-------------|
-| `mind_read` | Read a file inside `.mind/` by relative path. |
-| `mind_route` | Return the routing table from `INDEX.md` for the current intent. |
-| `mind_recall` | Search memory/context for a query (basic substring; embeddings optional). |
-| `mind_propose_write` | Create a `.mind/diff/*.md` proposing a change to a target file. |
+| `mind_read` | Read a `.mind/` file. Skills under `skills/` return a served payload with `trust_score`, `scanner_version`, `review_state`, and `review_meta`. |
+| `mind_route` | Return the routing table from `INDEX.md`. |
+| `mind_recall` | Search memory/context for a query. |
+| `mind_propose_write` | Create a `.mind/diff/*.md` proposing a change. |
+| `mind_trust` | Score a skill with deterministic trust heuristics (scanner **h5**) and return confidence trend. |
 | `mind_list` | List files under a subdirectory of `.mind/`. |
+
+## Served skill payload
+
+When reading `.mind/skills/*.md`, `mind_read` includes:
+
+- `version`, `trust_score`, `scanner_version`
+- `review_state`, `review_meta`
+- `confidence` (pass rate, trust delta, trend)
+
+Field names match the hosted ModelBound product for round-trip compatibility.
 
 ## Install
 
@@ -24,22 +35,15 @@ npm i -g @modelbound/mind-mcp
 mind-mcp --root /path/to/project
 ```
 
-Or add to your Claude Desktop / MCP client config:
+## Migration (0.1 → 0.2)
 
-```json
-{
-  "mcpServers": {
-    "mind": {
-      "command": "npx",
-      "args": ["-y", "@modelbound/mind-mcp", "--root", "."]
-    }
-  }
-}
-```
+- Skill reads now return JSON payloads for paths under `skills/` (not raw markdown only).
+- Add `mind_trust` for explicit trust scoring without a full read.
+- Pair with `@modelbound/mind-cli` for review lifecycle (`mind review approve`, `mind review gate`).
 
 ## Security
 
-The server refuses any path that escapes the `--root` directory. Writes only ever create files under `.mind/diff/` — the accept/reject step is left to the human or a trusted CI step.
+The server refuses any path that escapes the `--root` directory. Writes only ever create files under `.mind/diff/`.
 
 ## License
 
