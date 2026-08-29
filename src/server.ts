@@ -1,13 +1,6 @@
 #!/usr/bin/env node
 /**
  * mind-mcp — MCP server exposing a .mind/ folder to agents.
- *
- * Tools:
- *   mind_read           read a file inside .mind/
- *   mind_route          return INDEX.md routing table
- *   mind_recall         search memory/context by substring
- *   mind_propose_write  create a .mind/diff/*.md proposal
- *   mind_list           list files under a subdirectory of .mind/
  */
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
@@ -15,6 +8,7 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprot
 import { readFileSync, writeFileSync, readdirSync, statSync, mkdirSync, existsSync } from "node:fs";
 import { join, resolve, relative, sep } from "node:path";
 import { z } from "zod";
+import { buildServedSkillPayload, parseSkillForTrust } from "./lib/skillPayload.js";
 
 const args = process.argv.slice(2);
 const rootIdx = args.indexOf("--root");
@@ -75,8 +69,13 @@ const tools = [
     },
   },
   {
+    name: "mind_trust",
+    description: "Score a .mind/skills/ file with trust heuristics (h5) and return review metadata.",
+    inputSchema: { type: "object", properties: { path: { type: "string" } }, required: ["path"] },
+  },
+  {
     name: "mind_list",
-    description: "List markdown files under a subdirectory of .mind/.",
+    description: "List markdown files under a .mind/ subdirectory.",
     inputSchema: { type: "object", properties: { subdir: { type: "string" } } },
   },
 ];
@@ -88,8 +87,14 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
   try {
     switch (name) {
       case "mind_read": {
-        const p = safeResolve(z.string().parse(args.path));
-        return { content: [{ type: "text", text: readFileSync(p, "utf8") }] };
+        const rel = z.string().parse(args.path);
+        const p = safeResolve(rel);
+        const raw = readFileSync(p, "utf8");
+        if (rel.startsWith("skills/") || rel.includes("/skills/")) {
+          const payload = buildServedSkillPayload(ROOT, join(".mind", rel), raw);
+          return { content: [{ type: "text", text: JSON.stringify({ ...payload, body: raw }, null, 2) }] };
+        }
+        return { content: [{ type: "text", text: raw }] };
       }
       case "mind_route": {
         const p = safeResolve("INDEX.md");
@@ -120,6 +125,33 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
           `---\ntype: proposed-write\ntarget: ${target}\nconfidence: ${confidence}\nreason: ${reason}\n---\n\n# Proposed change\n\n${proposal}\n`,
         );
         return { content: [{ type: "text", text: `Created ${relative(ROOT, file)}` }] };
+      }
+      case "mind_trust": {
+        const rel = z.string().parse(args.path);
+        const p = safeResolve(rel);
+        const raw = readFileSync(p, "utf8");
+        const trust = parseSkillForTrust(raw, rel);
+        const payload = buildServedSkillPayload(ROOT, join(".mind", rel), raw);
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(
+                {
+                  path: rel,
+                  trust_score: payload.trust_score,
+                  scanner_version: payload.scanner_version,
+                  review_state: payload.review_state,
+                  review_meta: payload.review_meta,
+                  confidence: payload.confidence,
+                  findings: trust.findings,
+                },
+                null,
+                2,
+              ),
+            },
+          ],
+        };
       }
       case "mind_list": {
         const sub = (args.subdir as string) ?? "";

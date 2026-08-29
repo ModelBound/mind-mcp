@@ -1,13 +1,17 @@
 {
   "name": "@modelbound/mind-mcp",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "MCP server exposing a .mind/ folder to agents.",
   "license": "Apache-2.0",
   "type": "module",
   "bin": {
     "mind-mcp": "./dist/server.js"
   },
-  "files": ["dist", "README.md", "LICENSE"],
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsc && chmod +x dist/server.js",
     "prepublishOnly": "npm run build"
@@ -17,6 +21,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
+    "gray-matter": "^4.0.3",
     "zod": "^3.23.0"
   },
   "devDependencies": {
